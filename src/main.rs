@@ -43,8 +43,8 @@ struct DrawSettings {
 
     refresh_rate : i32,
     multicolor_trail : bool,
-    primary_color : i32,
-    secondary_color : i32,
+    primary_color : u32,
+    secondary_color : u32,
     go_fast : bool,
 }
 
@@ -66,12 +66,25 @@ fn draw_drop(drop : &mut Droplet, draw_settings: DrawSettings) {
         drop.row += 1;
     }
     else {
+        let color : u32;
+        if draw_settings.multicolor_trail {
+            if rand::rng().random_bool(0.5) {
+                color = draw_settings.primary_color;
+            }
+            else {
+                color = draw_settings.secondary_color;
+            }
+        }
+        else {
+            color = draw_settings.primary_color;
+        }
+        
         // Update the drop onscreen
         ncurses::mvaddch(drop.row - drop.length - 2, drop.col, ' ' as u32 );
-        // color = primary_color;
-        ncurses::attron(ncurses::COLOR_PAIR(3));
+        
+        ncurses::attron(color);
         ncurses::mvaddch(drop.row - 1, drop.col, rand::rng().random_range(MIN_CHAR..MAX_CHAR));
-        ncurses::attroff(ncurses::COLOR_PAIR(3));
+        ncurses::attroff(color);
 
         ncurses::attron(ncurses::COLOR_PAIR(8));
         ncurses::mvaddch(drop.row, drop.col, rand::rng().random_range(MIN_CHAR..MAX_CHAR));
@@ -88,7 +101,7 @@ fn main() {
 
     let mut draw_settings: DrawSettings = DrawSettings {
         max_row: 100, max_col: 100,
-        refresh_rate: 4, multicolor_trail: false,
+        refresh_rate: 4, multicolor_trail: true,
         primary_color: 3, secondary_color: 7,
         go_fast: true
     };
@@ -102,6 +115,11 @@ fn main() {
     ncurses::nodelay(ncurses::stdscr(), true);
 
     ncurses::getmaxyx(ncurses::stdscr(), &mut draw_settings.max_row, &mut draw_settings.max_col);
+
+    if !ncurses::has_colors() {
+        println!("You have no colors :(\n");
+        return;
+    }
 
     ncurses::start_color();
     ncurses::use_default_colors();
@@ -141,7 +159,7 @@ fn main() {
             'q' => break,
             'v' => draw_settings.go_fast = !draw_settings.go_fast,
             'c' => draw_settings.multicolor_trail = !draw_settings.multicolor_trail,
-            '1'..='9' => println!("User pressed {0}", next), // primary_color = next.digit()
+            '1'..='9' => draw_settings.primary_color = next as u32, // println!("User pressed {0}", next), // 
             't' => println!("test_value = {0}", draw_settings.refresh_rate),
             _ => (),
         }
@@ -149,7 +167,7 @@ fn main() {
         let f1 : i32 = ncurses::KEY_F(1);
         let f8 : i32 = ncurses::KEY_F(8);
         if next >= f1 && next <= f8 {
-            draw_settings.secondary_color = next - f1
+            draw_settings.secondary_color = (next - f1) as u32
         }
 
         match next {
