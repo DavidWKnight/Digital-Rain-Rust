@@ -36,13 +36,26 @@ impl Droplet
     }
 }
 
-fn draw_drop(drop : &mut Droplet, refresh_rate : i32, go_fast : bool, multicolor_trail : bool) {
+#[derive(Copy, Clone)]
+struct DrawSettings {
+    max_row : i32,
+    max_col : i32,
+
+    refresh_rate : i32,
+    multicolor_trail : bool,
+    primary_color : i32,
+    secondary_color : i32,
+    go_fast : bool,
+}
+
+
+fn draw_drop(drop : &mut Droplet, draw_settings: DrawSettings) {
     let temp : i32;
-    if go_fast {
-        temp = (drop.length/2) - 2 + refresh_rate;
+    if draw_settings.go_fast {
+        temp = (drop.length/2) - 2 + draw_settings.refresh_rate;
     }
     else {
-        temp = refresh_rate;
+        temp = draw_settings.refresh_rate;
     }
 
     if drop.frames_per_row % (temp/2+1) > 0 {
@@ -73,14 +86,12 @@ fn draw_drop(drop : &mut Droplet, refresh_rate : i32, go_fast : bool, multicolor
 fn main() {
     let tick_rate = time::Duration::from_millis(20);
 
-    let mut refresh_rate : i32 = 4;
-    let mut multicolor_trail : bool = false;
-    let mut primary_color : i32 = 3;
-    let mut secondary_color : i32 = 7;
-    let mut go_fast : bool = true;
-
-    let mut max_row : i32 = 100;
-    let mut max_col : i32 = 100;
+    let mut draw_settings: DrawSettings = DrawSettings {
+        max_row: 100, max_col: 100,
+        refresh_rate: 4, multicolor_trail: false,
+        primary_color: 3, secondary_color: 7,
+        go_fast: true
+    };
 
     ncurses::initscr();
     let _cleanup = Cleanup;
@@ -90,7 +101,7 @@ fn main() {
     ncurses::cbreak();
     ncurses::nodelay(ncurses::stdscr(), true);
 
-    ncurses::getmaxyx(ncurses::stdscr(), &mut max_row, &mut max_col);
+    ncurses::getmaxyx(ncurses::stdscr(), &mut draw_settings.max_row, &mut draw_settings.max_col);
 
     ncurses::start_color();
     ncurses::use_default_colors();
@@ -103,28 +114,24 @@ fn main() {
     ncurses::init_pair(7, ncurses::COLOR_CYAN, -1); 
     ncurses::init_pair(8, ncurses::COLOR_WHITE, -1);
 
-    let screen_area : u32 = (max_row as u32) * (max_col as u32);
+    let screen_area : u32 = (draw_settings.max_row as u32) * (draw_settings.max_col as u32);
     let n_droplets : u32 = screen_area/50;
     let mut droplets : Vec<Droplet> = Vec::new();
     
     for _ in 1..=n_droplets {
-        droplets.push(Droplet::new(max_row, max_col));
+        droplets.push(Droplet::new(draw_settings.max_row, draw_settings.max_col));
     }
 
     loop
     {
         thread::sleep(tick_rate);
         for drop in &mut droplets {
-            draw_drop(drop, refresh_rate, go_fast, multicolor_trail);
+            draw_drop(drop, draw_settings);
     
             // Check if droplet is entirely offscreen
-            if drop.row > max_row+drop.length {
+            if drop.row > draw_settings.max_row+drop.length {
                 ncurses::mvaddch(drop.row - drop.length-2, drop.col, ' ' as u32);
-                let new_drop : Droplet = Droplet::new(max_row, max_col);
-                drop.length = new_drop.length;
-                drop.row = new_drop.row;
-                drop.col = new_drop.col;
-                drop.frames_per_row = new_drop.frames_per_row;
+                *drop = Droplet::new(draw_settings.max_row, draw_settings.max_col);
             }
         }
         
@@ -132,22 +139,22 @@ fn main() {
         next = ncurses::getch();
         match (next as u8) as char {
             'q' => break,
-            'v' => go_fast = !go_fast,
-            'c' => multicolor_trail = !multicolor_trail,
+            'v' => draw_settings.go_fast = !draw_settings.go_fast,
+            'c' => draw_settings.multicolor_trail = !draw_settings.multicolor_trail,
             '1'..='9' => println!("User pressed {0}", next), // primary_color = next.digit()
-            't' => println!("test_value = {0}", refresh_rate),
+            't' => println!("test_value = {0}", draw_settings.refresh_rate),
             _ => (),
         }
 
         let f1 : i32 = ncurses::KEY_F(1);
         let f8 : i32 = ncurses::KEY_F(8);
         if next >= f1 && next <= f8 {
-            secondary_color = next - f1
+            draw_settings.secondary_color = next - f1
         }
 
         match next {
-            ncurses::KEY_DOWN => refresh_rate = std::cmp::min(refresh_rate+1, 20),
-            ncurses::KEY_UP => refresh_rate = std::cmp::max(refresh_rate-1, 0),
+            ncurses::KEY_DOWN => draw_settings.refresh_rate = std::cmp::min(draw_settings.refresh_rate+1, 20),
+            ncurses::KEY_UP => draw_settings.refresh_rate = std::cmp::max(draw_settings.refresh_rate-1, 0),
             _ => (),
         }
 
